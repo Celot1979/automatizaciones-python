@@ -236,16 +236,21 @@ class OrganizadorArchivosApp:
         if not ruta:
             return
         tipos_seleccionados = {k: v for k, v in EXTENSIONES_A_CARPETAS.items() if self.check_vars[k].get()}
-        if not tipos_seleccionados:
-            return
         archivo = os.path.basename(ruta_archivo)
         _, extension = os.path.splitext(archivo)
         extension = extension.lower()
+        # Si la extensión no está reflejada, crear directorio EXT_<EXT>
+        if not any(extension in v for v in EXTENSIONES_A_CARPETAS.values()):
+            nombre_dir = f"EXT_{extension[1:].upper()}"
+            tipos_seleccionados[nombre_dir] = [extension]
         subdir_metadatos = self._obtener_subdirectorio_metadatos(ruta_archivo, extension)
         movido = False
         ruta_log = os.path.join(ruta, "registro_movimientos.txt")
         for carpeta, extensiones in tipos_seleccionados.items():
             if extension in extensiones:
+                ruta_carpeta = os.path.join(ruta, carpeta)
+                if not os.path.exists(ruta_carpeta):
+                    os.makedirs(ruta_carpeta)
                 ruta_carpeta_fecha = os.path.join(ruta, carpeta, subdir_metadatos)
                 if not os.path.exists(ruta_carpeta_fecha):
                     os.makedirs(ruta_carpeta_fecha)
@@ -263,10 +268,13 @@ class OrganizadorArchivosApp:
                 break
         if not movido:
             carpeta_no_clasificados = "No clasificados"
-            ruta_no_clasificados = os.path.join(ruta, carpeta_no_clasificados, subdir_metadatos)
+            ruta_no_clasificados = os.path.join(ruta, carpeta_no_clasificados)
             if not os.path.exists(ruta_no_clasificados):
                 os.makedirs(ruta_no_clasificados)
-            destino = self._obtener_nombre_disponible(ruta_no_clasificados, archivo)
+            ruta_no_clasificados_fecha = os.path.join(ruta_no_clasificados, subdir_metadatos)
+            if not os.path.exists(ruta_no_clasificados_fecha):
+                os.makedirs(ruta_no_clasificados_fecha)
+            destino = self._obtener_nombre_disponible(ruta_no_clasificados_fecha, archivo)
             try:
                 shutil.move(ruta_archivo, destino)
                 destino_log = destino.replace('\\', '/')
@@ -282,11 +290,19 @@ class OrganizadorArchivosApp:
         if not ruta:
             messagebox.showerror("Error", "Por favor selecciona una carpeta.")
             return
-        tipos_seleccionados = {k: v for k, v in EXTENSIONES_A_CARPETAS.items() if self.check_vars[k].get()}
-        if not tipos_seleccionados:
-            messagebox.showerror("Error", "Selecciona al menos un tipo de archivo.")
+        archivos_en_raiz = [f for f in os.listdir(ruta) if os.path.isfile(os.path.join(ruta, f))]
+        extensiones_presentes = set(os.path.splitext(f)[1].lower() for f in archivos_en_raiz)
+        tipos_detectados = {k: v for k, v in EXTENSIONES_A_CARPETAS.items() if any(ext in extensiones_presentes for ext in v)}
+        # Detectar extensiones no reflejadas
+        extensiones_no_reflejadas = extensiones_presentes - set(e for v in EXTENSIONES_A_CARPETAS.values() for e in v)
+        for ext in extensiones_no_reflejadas:
+            if ext:
+                nombre_dir = f"EXT_{ext[1:].upper()}"
+                tipos_detectados[nombre_dir] = [ext]
+        if not tipos_detectados:
+            messagebox.showinfo("Sin archivos", "No se detectaron archivos compatibles para organizar en la carpeta seleccionada.")
             return
-        for carpeta in tipos_seleccionados.keys():
+        for carpeta in tipos_detectados.keys():
             ruta_carpeta = os.path.join(ruta, carpeta)
             if not os.path.exists(ruta_carpeta):
                 os.makedirs(ruta_carpeta)
@@ -296,15 +312,13 @@ class OrganizadorArchivosApp:
             os.makedirs(ruta_no_clasificados)
         ruta_log = os.path.join(ruta, "registro_movimientos.txt")
         usuario = getpass.getuser()
-        for archivo in os.listdir(ruta):
+        for archivo in archivos_en_raiz:
             ruta_archivo = os.path.join(ruta, archivo)
-            if os.path.isdir(ruta_archivo):
-                continue
             _, extension = os.path.splitext(archivo)
             extension = extension.lower()
             movido = False
             subdir_metadatos = self._obtener_subdirectorio_metadatos(ruta_archivo, extension)
-            for carpeta, extensiones in tipos_seleccionados.items():
+            for carpeta, extensiones in tipos_detectados.items():
                 if extension in extensiones:
                     ruta_carpeta_fecha = os.path.join(ruta, carpeta, subdir_metadatos)
                     if not os.path.exists(ruta_carpeta_fecha):
