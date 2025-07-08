@@ -1,27 +1,74 @@
 import os
 import shutil
 
-#Ruta donde están los archivos a ordenar
+# Ruta donde están los archivos a ordenar
 ruta = "/Users/danielgil/Documents/Venta del ordenador"
 
-#Crear carpetas en destino sí no existen
+# Diccionario que mapea extensiones a carpetas
+extensiones_a_carpetas = {
+    "Imágenes": [".jpg", ".jpeg", ".png", ".bmp", ".heif"],
+    "PDFs": [".pdf"],
+    "Vídeos": [".mp4", ".mov", ".avi"],
+    "Documentos": [".doc", ".xls", ".xlsx"],
+    "Documentos_txt": [".txt"],
+    "Documentos_docx": [".docx"]
+}
 
-tipos=["Imágenes","PDFs","Vídeos","Documentos", "Documentos_txt", "Documentos_docx"]
-
-for carpeta in tipos:
-    ruta_carpeta= os.path.join(ruta,carpeta)
+# Crear carpetas en destino si no existen
+for carpeta in extensiones_a_carpetas.keys():
+    ruta_carpeta = os.path.join(ruta, carpeta)
     if not os.path.exists(ruta_carpeta):
         os.makedirs(ruta_carpeta)
 
+# Crear carpeta para archivos no clasificados
+carpeta_no_clasificados = "No clasificados"
+ruta_no_clasificados = os.path.join(ruta, carpeta_no_clasificados)
+if not os.path.exists(ruta_no_clasificados):
+    os.makedirs(ruta_no_clasificados)
 
-
+# Recorrer archivos en la ruta
 for archivo in os.listdir(ruta):
-    if archivo.endswith(".jpg") or archivo.endswith(".png") or archivo.endswith(".bmp") or archivo.endswith(".heif") or archivo.endswith(".jpg"):
-        shutil.move(os.path.join(ruta, archivo), os.path.join(ruta, "Imágenes", archivo))
-    elif archivo.endswith(".pdf"):
-        shutil.move(os.path.join(ruta, archivo), os.path.join(ruta, "PDFs", archivo))
-    elif archivo.endswith(".mp4") or archivo.endswith(".mov") or archivo.endswith(".avi"):
-       shutil.move(os.path.join(ruta,archivo),os.path.join(ruta,"Vídeos",archivo)) 
-    elif archivo.endswith(".doc") or archivo.endswith(".docx") or archivo.endswith(".xls") or archivo.endswith(".xlsx"):
-        shutil.move(os.path.join(ruta,archivo),os.path.join(ruta,"Documentos",archivo))
+    ruta_archivo = os.path.join(ruta, archivo)
+    # Ignorar carpetas
+    if os.path.isdir(ruta_archivo):
+        continue
+    # Obtener extensión en minúsculas
+    _, extension = os.path.splitext(archivo)
+    extension = extension.lower()
+    movido = False
+    for carpeta, extensiones in extensiones_a_carpetas.items():
+        if extension in extensiones:
+            destino = os.path.join(ruta, carpeta, archivo)
+            # Manejar conflicto de nombres
+            if os.path.exists(destino):
+                base, ext = os.path.splitext(archivo)
+                i = 1
+                while True:
+                    nuevo_nombre = f"{base}_({i}){ext}"
+                    destino = os.path.join(ruta, carpeta, nuevo_nombre)
+                    if not os.path.exists(destino):
+                        break
+                    i += 1
+            try:
+                shutil.move(ruta_archivo, destino)
+            except Exception as e:
+                print(f"Error al mover {archivo}: {e}")
+            movido = True
+            break
+    if not movido:
+        # Mover a 'No clasificados'
+        destino = os.path.join(ruta_no_clasificados, archivo)
+        if os.path.exists(destino):
+            base, ext = os.path.splitext(archivo)
+            i = 1
+            while True:
+                nuevo_nombre = f"{base}_({i}){ext}"
+                destino = os.path.join(ruta_no_clasificados, nuevo_nombre)
+                if not os.path.exists(destino):
+                    break
+                i += 1
+        try:
+            shutil.move(ruta_archivo, destino)
+        except Exception as e:
+            print(f"Error al mover {archivo} a 'No clasificados': {e}")
 
