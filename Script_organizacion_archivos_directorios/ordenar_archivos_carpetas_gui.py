@@ -21,6 +21,20 @@ class OrganizadorArchivosApp:
         self.check_vars = {tipo: tk.BooleanVar(value=True) for tipo in EXTENSIONES_A_CARPETAS}
         self._crear_widgets()
 
+    def _obtener_nombre_disponible(self, carpeta_destino, nombre_archivo):
+        """
+        Dado un nombre de archivo y una carpeta destino, devuelve un nombre disponible
+        agregando _(<número>) antes de la extensión si es necesario.
+        """
+        base, ext = os.path.splitext(nombre_archivo)
+        destino = os.path.join(carpeta_destino, nombre_archivo)
+        i = 1
+        while os.path.exists(destino):
+            nuevo_nombre = f"{base}_({i}){ext}"
+            destino = os.path.join(carpeta_destino, nuevo_nombre)
+            i += 1
+        return destino
+
     def _crear_widgets(self):
         frame = tk.Frame(self.root)
         frame.pack(padx=20, pady=20)
@@ -70,16 +84,7 @@ class OrganizadorArchivosApp:
             movido = False
             for carpeta, extensiones in tipos_seleccionados.items():
                 if extension in extensiones:
-                    destino = os.path.join(ruta, carpeta, archivo)
-                    if os.path.exists(destino):
-                        base, ext = os.path.splitext(archivo)
-                        i = 1
-                        while True:
-                            nuevo_nombre = f"{base}_({i}){ext}"
-                            destino = os.path.join(ruta, carpeta, nuevo_nombre)
-                            if not os.path.exists(destino):
-                                break
-                            i += 1
+                    destino = self._obtener_nombre_disponible(os.path.join(ruta, carpeta), archivo)
                     try:
                         shutil.move(ruta_archivo, destino)
                     except Exception as e:
@@ -87,16 +92,7 @@ class OrganizadorArchivosApp:
                     movido = True
                     break
             if not movido:
-                destino = os.path.join(ruta_no_clasificados, archivo)
-                if os.path.exists(destino):
-                    base, ext = os.path.splitext(archivo)
-                    i = 1
-                    while True:
-                        nuevo_nombre = f"{base}_({i}){ext}"
-                        destino = os.path.join(ruta_no_clasificados, nuevo_nombre)
-                        if not os.path.exists(destino):
-                            break
-                        i += 1
+                destino = self._obtener_nombre_disponible(ruta_no_clasificados, archivo)
                 try:
                     shutil.move(ruta_archivo, destino)
                 except Exception as e:
