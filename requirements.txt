@@ -3,5 +3,6 @@ Pillow
 PyPDF2
 python-docx
 hachoir
+watchdog
 # tkinter suele venir con Python estándar, pero si se instala en un entorno mínimo:
 # tk 
