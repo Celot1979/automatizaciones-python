@@ -4,5 +4,6 @@ PyPDF2
 python-docx
 hachoir
 watchdog
+tkinterdnd2
 # tkinter suele venir con Python estándar, pero si se instala en un entorno mínimo:
 # tk 

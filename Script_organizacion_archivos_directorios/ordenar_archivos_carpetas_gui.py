@@ -193,6 +193,22 @@ class OrganizadorArchivosApp:
         # Si no hay metadatos, usar solo la fecha del sistema
         return self._obtener_fecha_archivo(ruta_archivo)
 
+    def _escribir_registro_tabla(self, ruta_log, movimientos):
+        # movimientos: lista de [fecha, nombre, ruta_destino]
+        # Calcular anchos de columna
+        encabezados = ["Fecha", "Nombre", "Ruta destino"]
+        cols = list(zip(*([encabezados] + movimientos)))
+        anchos = [max(len(str(item)) for item in col) for col in cols]
+        def fila_tabla(fila):
+            return "* " + " * ".join(str(item).ljust(anchos[i]) for i, item in enumerate(fila)) + " *"
+        separador = "*" + "*".join(["".ljust(anchos[i]+2, "*") for i in range(len(anchos))]) + "*"
+        lineas = [separador, fila_tabla(encabezados), separador]
+        for mov in movimientos:
+            lineas.append(fila_tabla(mov))
+        lineas.append(separador)
+        with open(ruta_log, "w", encoding="utf-8") as f:
+            f.write("\n".join(lineas) + "\n")
+
     def _crear_widgets(self):
         frame = tk.Frame(self.root)
         frame.pack(padx=20, pady=20)
@@ -206,8 +222,142 @@ class OrganizadorArchivosApp:
             tk.Checkbutton(frame, text=tipo, variable=self.check_vars[tipo]).grid(row=3+i, column=0, sticky="w")
 
         tk.Button(frame, text="Organizar", command=self.organizar).grid(row=3+len(EXTENSIONES_A_CARPETAS), column=0, pady=(15,0))
-        # Botón para ver el registro
         tk.Button(frame, text="Ver registro de movimientos", command=self.ver_registro).grid(row=4+len(EXTENSIONES_A_CARPETAS), column=0, pady=(5,0))
+
+        # --- Botón para renombrar archivos en masa en la ventana principal ---
+        def abrir_ventana_renombrar():
+            ventana_renombrar = tk.Toplevel(self.root)
+            ventana_renombrar.title("Renombrar archivos en masa")
+            tk.Label(ventana_renombrar, text="Selecciona el directorio base:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+            entry_dir = tk.Entry(ventana_renombrar, width=40)
+            entry_dir.grid(row=0, column=1, padx=5, pady=5)
+            def seleccionar_dir():
+                carpeta = filedialog.askdirectory()
+                if carpeta:
+                    entry_dir.delete(0, tk.END)
+                    entry_dir.insert(0, carpeta)
+            tk.Button(ventana_renombrar, text="Explorar", command=seleccionar_dir).grid(row=0, column=2, padx=5, pady=5)
+            tk.Label(ventana_renombrar, text="Nombre base para renombrar:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+            entry_nombre = tk.Entry(ventana_renombrar, width=30)
+            entry_nombre.grid(row=1, column=1, padx=5, pady=5)
+            def ejecutar_renombrado():
+                dir_base = entry_dir.get().strip()
+                nombre_base = entry_nombre.get().strip()
+                if not dir_base or not nombre_base:
+                    messagebox.showerror("Error", "Debes seleccionar un directorio y un nombre base.")
+                    return
+                archivos = []
+                for root, _, files in os.walk(dir_base):
+                    for f in files:
+                        archivos.append(os.path.join(root, f))
+                archivos.sort()  # Para consistencia
+                contador = 1
+                for archivo in archivos:
+                    dir_actual = os.path.dirname(archivo)
+                    _, ext = os.path.splitext(archivo)
+                    nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                    nuevo_path = os.path.join(dir_actual, nuevo_nombre)
+                    # Evitar sobrescribir
+                    while os.path.exists(nuevo_path):
+                        contador += 1
+                        nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                        nuevo_path = os.path.join(dir_actual, nuevo_nombre)
+                    try:
+                        os.rename(archivo, nuevo_path)
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo renombrar {archivo}: {e}")
+                        return
+                    contador += 1
+                messagebox.showinfo("Éxito", f"Se renombraron {len(archivos)} archivos.")
+                ventana_renombrar.destroy()
+            tk.Button(ventana_renombrar, text="Renombrar", command=ejecutar_renombrado).grid(row=2, column=1, pady=10)
+        tk.Button(frame, text="Renombrar archivos en masa", command=abrir_ventana_renombrar).grid(row=5+len(EXTENSIONES_A_CARPETAS), column=0, pady=(10,0))
+
+        # --- Botón para unificar archivos en la ventana principal ---
+        def abrir_ventana_unificar():
+            ventana_unificar = tk.Toplevel(self.root)
+            ventana_unificar.title("Unificar archivos")
+            tk.Label(ventana_unificar, text="Selecciona los directorios a unificar:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+            listbox_dirs = tk.Listbox(ventana_unificar, selectmode=tk.MULTIPLE, width=40, height=6)
+            listbox_dirs.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+            dirs_seleccionados = []
+            def agregar_directorio():
+                carpeta = filedialog.askdirectory()
+                if carpeta and carpeta not in dirs_seleccionados:
+                    dirs_seleccionados.append(carpeta)
+                    listbox_dirs.insert(tk.END, carpeta)
+            tk.Button(ventana_unificar, text="Agregar directorio", command=agregar_directorio).grid(row=0, column=1, padx=5, pady=5)
+            def eliminar_directorio():
+                seleccion = listbox_dirs.curselection()
+                for i in reversed(seleccion):
+                    dirs_seleccionados.pop(i)
+                    listbox_dirs.delete(i)
+            tk.Button(ventana_unificar, text="Eliminar seleccionado", command=eliminar_directorio).grid(row=2, column=1, padx=5, pady=5)
+            tk.Label(ventana_unificar, text="Selecciona el directorio destino:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+            entry_destino = tk.Entry(ventana_unificar, width=40)
+            entry_destino.grid(row=3, column=1, padx=5, pady=5)
+            def seleccionar_destino():
+                carpeta = filedialog.askdirectory()
+                if carpeta:
+                    entry_destino.delete(0, tk.END)
+                    entry_destino.insert(0, carpeta)
+            tk.Button(ventana_unificar, text="Explorar", command=seleccionar_destino).grid(row=3, column=2, padx=5, pady=5)
+            tk.Label(ventana_unificar, text="Nombre base para los archivos:").grid(row=4, column=0, padx=5, pady=5, sticky="w")
+            entry_nombre = tk.Entry(ventana_unificar, width=30)
+            entry_nombre.grid(row=4, column=1, padx=5, pady=5)
+            def ejecutar_unificacion():
+                destino = entry_destino.get().strip()
+                nombre_base = entry_nombre.get().strip()
+                if not dirs_seleccionados or not destino or not nombre_base:
+                    messagebox.showerror("Error", "Debes seleccionar al menos un directorio, un destino y un nombre base.")
+                    return
+                archivos = []
+                for d in dirs_seleccionados:
+                    for root, _, files in os.walk(d):
+                        for f in files:
+                            archivos.append(os.path.join(root, f))
+                archivos.sort()  # Para consistencia
+                contador = 1
+                movimientos = []
+                ruta_log = os.path.join(destino, "registro_movimientos.txt")
+                # Leer movimientos previos si existen
+                if os.path.exists(ruta_log):
+                    with open(ruta_log, "r", encoding="utf-8") as f:
+                        for linea in f:
+                            l = linea.strip()
+                            if l.startswith("*") and not set(l) <= {'*'}:
+                                partes = [p.strip() for p in l.strip('*').split('*')]
+                                if len(partes) == 3 and partes[0] and partes[1] and partes[2] and partes[0] != "Fecha":
+                                    movimientos.append(partes)
+                base_folder = os.path.basename(destino.rstrip(os.sep))
+                for archivo in archivos:
+                    nombre_original = os.path.basename(archivo)
+                    _, ext = os.path.splitext(archivo)
+                    nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                    nuevo_path = os.path.join(destino, nuevo_nombre)
+                    ruta_relativa = f"{base_folder}/{nuevo_nombre}"
+                    # Evitar sobrescribir
+                    while os.path.exists(nuevo_path):
+                        contador += 1
+                        nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                        nuevo_path = os.path.join(destino, nuevo_nombre)
+                        ruta_relativa = f"{base_folder}/{nuevo_nombre}"
+                    try:
+                        shutil.copy2(archivo, nuevo_path)
+                        movimientos.append([
+                            datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            nombre_original,
+                            ruta_relativa
+                        ])
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo copiar {archivo}: {e}")
+                        return
+                    contador += 1
+                self._escribir_registro_tabla(ruta_log, movimientos)
+                messagebox.showinfo("Éxito", f"Se unificaron {len(archivos)} archivos en {destino}.")
+                ventana_unificar.destroy()
+            tk.Button(ventana_unificar, text="Unificar", command=ejecutar_unificacion).grid(row=5, column=1, pady=10)
+        tk.Button(frame, text="Unificar archivos", command=abrir_ventana_unificar).grid(row=6+len(EXTENSIONES_A_CARPETAS), column=0, pady=(10,0))
 
     def seleccionar_carpeta(self):
         carpeta = filedialog.askdirectory()
@@ -217,6 +367,7 @@ class OrganizadorArchivosApp:
 
     def organizar_archivo_individual(self, ruta_archivo):
         import time
+        import os
         # Excluir el archivo de log
         if os.path.basename(ruta_archivo) == 'registro_movimientos.txt':
             print(f"[Organizador] Ignorado: {ruta_archivo}")
@@ -258,10 +409,27 @@ class OrganizadorArchivosApp:
                 try:
                     shutil.move(ruta_archivo, destino)
                     destino_log = destino.replace('\\', '/')
-                    with open(ruta_log, "a", encoding="utf-8") as f:
-                        f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Movido: {archivo} -> {destino_log}\n")
-                    messagebox.showinfo("Archivo organizado", f"Se organizó el archivo:\n{archivo}\n\nUbicación final:\n{destino_log}")
-                    print(f"[Organizador] Movido: {archivo} -> {destino_log}")
+                    # Leer movimientos previos
+                    movimientos = []
+                    if os.path.exists(ruta_log):
+                        with open(ruta_log, "r", encoding="utf-8") as f:
+                            for linea in f:
+                                if linea.startswith("*") and not linea.strip().startswith("* Fecha") and not set(linea.strip()) <= {'*'}:
+                                    partes = [p.strip() for p in linea.strip().strip('*').split('*')]
+                                    if len(partes) == 3:
+                                        movimientos.append(partes)
+                    # Agregar nuevo movimiento
+                    base_folder = os.path.basename(ruta.rstrip(os.sep))
+                    ruta_relativa = os.path.relpath(destino_log, ruta)
+                    ruta_mostrar = f"{base_folder}/{ruta_relativa}".replace("\\", "/")
+                    movimientos.append([
+                        datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        archivo,
+                        ruta_mostrar
+                    ])
+                    self._escribir_registro_tabla(ruta_log, movimientos)
+                    messagebox.showinfo("Archivo organizado", f"Se organizó el archivo:\n{archivo}\n\nUbicación final:\n{ruta_mostrar}")
+                    print(f"[Organizador] Movido: {archivo} -> {ruta_mostrar}")
                 except Exception as e:
                     print(f"Error al mover {archivo}: {e}")
                 movido = True
@@ -278,10 +446,25 @@ class OrganizadorArchivosApp:
             try:
                 shutil.move(ruta_archivo, destino)
                 destino_log = destino.replace('\\', '/')
-                with open(ruta_log, "a", encoding="utf-8") as f:
-                    f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Movido: {archivo} -> {destino_log}\n")
-                messagebox.showinfo("Archivo organizado", f"Se organizó el archivo:\n{archivo}\n\nUbicación final:\n{destino_log}")
-                print(f"[Organizador] Movido: {archivo} -> {destino_log}")
+                movimientos = []
+                if os.path.exists(ruta_log):
+                    with open(ruta_log, "r", encoding="utf-8") as f:
+                        for linea in f:
+                            if linea.startswith("*") and not linea.strip().startswith("* Fecha") and not set(linea.strip()) <= {'*'}:
+                                partes = [p.strip() for p in linea.strip().strip('*').split('*')]
+                                if len(partes) == 3:
+                                    movimientos.append(partes)
+                base_folder = os.path.basename(ruta.rstrip(os.sep))
+                ruta_relativa = os.path.relpath(destino_log, ruta)
+                ruta_mostrar = f"{base_folder}/{ruta_relativa}".replace("\\", "/")
+                movimientos.append([
+                    datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    archivo,
+                    ruta_mostrar
+                ])
+                self._escribir_registro_tabla(ruta_log, movimientos)
+                messagebox.showinfo("Archivo organizado", f"Se organizó el archivo:\n{archivo}\n\nUbicación final:\n{ruta_mostrar}")
+                print(f"[Organizador] Movido: {archivo} -> {ruta_mostrar}")
             except Exception as e:
                 print(f"Error al mover {archivo} a 'No clasificados': {e}")
 
@@ -312,6 +495,15 @@ class OrganizadorArchivosApp:
             os.makedirs(ruta_no_clasificados)
         ruta_log = os.path.join(ruta, "registro_movimientos.txt")
         usuario = getpass.getuser()
+        movimientos = []
+        # Leer movimientos previos si existen
+        if os.path.exists(ruta_log):
+            with open(ruta_log, "r", encoding="utf-8") as f:
+                for linea in f:
+                    if linea.startswith("*") and not linea.strip().startswith("* Fecha") and not set(linea.strip()) <= {'*'}:
+                        partes = [p.strip() for p in linea.strip().strip('*').split('*')]
+                        if len(partes) == 3:
+                            movimientos.append(partes)
         for archivo in archivos_en_raiz:
             ruta_archivo = os.path.join(ruta, archivo)
             _, extension = os.path.splitext(archivo)
@@ -327,8 +519,14 @@ class OrganizadorArchivosApp:
                     try:
                         shutil.move(ruta_archivo, destino)
                         destino_log = destino.replace('\\', '/')
-                        with open(ruta_log, "a", encoding="utf-8") as f:
-                            f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Movido: {archivo} -> {destino_log}\n")
+                        base_folder = os.path.basename(ruta.rstrip(os.sep))
+                        ruta_relativa = os.path.relpath(destino_log, ruta)
+                        ruta_mostrar = f"{base_folder}/{ruta_relativa}".replace("\\", "/")
+                        movimientos.append([
+                            datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            archivo,
+                            ruta_mostrar
+                        ])
                     except Exception as e:
                         print(f"Error al mover {archivo}: {e}")
                     movido = True
@@ -341,16 +539,23 @@ class OrganizadorArchivosApp:
                 try:
                     shutil.move(ruta_archivo, destino)
                     destino_log = destino.replace('\\', '/')
-                    with open(ruta_log, "a", encoding="utf-8") as f:
-                        f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Movido: {archivo} -> {destino_log}\n")
+                    base_folder = os.path.basename(ruta.rstrip(os.sep))
+                    ruta_relativa = os.path.relpath(destino_log, ruta)
+                    ruta_mostrar = f"{base_folder}/{ruta_relativa}".replace("\\", "/")
+                    movimientos.append([
+                        datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        archivo,
+                        ruta_mostrar
+                    ])
                 except Exception as e:
                     print(f"Error al mover {archivo} a 'No clasificados': {e}")
+        self._escribir_registro_tabla(ruta_log, movimientos)
         messagebox.showinfo("Éxito", "Operación realizada con éxito")
 
     def ver_registro(self):
         import tkinter.ttk as ttk
         from datetime import datetime as dt
-        import re
+        import os
         ruta = self.ruta.get()
         if not ruta:
             messagebox.showerror("Error", "Por favor selecciona una carpeta para ver su registro.")
@@ -364,14 +569,18 @@ class OrganizadorArchivosApp:
         if not lineas:
             messagebox.showinfo("Registro", "El registro está vacío.")
             return
-        # Parsear líneas del log: 'YYYY-MM-DD HH:MM:SS - Movido: archivo -> ruta'
+        # Parsear la tabla: ignorar separadores y encabezado, extraer filas de datos
         datos = []
-        patron = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - Movido: (.+?) -> (.+)$")
         for linea in lineas:
-            m = patron.match(linea.strip())
-            if m:
-                fecha, nombre, ruta_destino = m.groups()
-                datos.append([fecha, nombre, ruta_destino])
+            l = linea.strip()
+            if l.startswith("*") and not set(l) <= {'*'}:
+                partes = [p.strip() for p in l.strip('*').split('*')]
+                # Saltar encabezado
+                if partes and partes[0] == "Fecha":
+                    continue
+                # Saltar filas vacías
+                if len(partes) == 3 and partes[0] and partes[1] and partes[2]:
+                    datos.append(partes)
         if not datos:
             messagebox.showinfo("Registro", "No hay registros válidos para mostrar.")
             return
@@ -448,6 +657,55 @@ class OrganizadorArchivosApp:
                     filtrados.append(fila)
             cargar_tabla(filtrados)
         tk.Button(frame_filtros, text="Filtrar", command=filtrar).grid(row=0, column=8, padx=5)
+
+        # --- Botón para renombrar archivos en masa ---
+        def abrir_ventana_renombrar():
+            ventana_renombrar = tk.Toplevel(ventana)
+            ventana_renombrar.title("Renombrar archivos en masa")
+            tk.Label(ventana_renombrar, text="Selecciona el directorio base:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+            entry_dir = tk.Entry(ventana_renombrar, width=40)
+            entry_dir.grid(row=0, column=1, padx=5, pady=5)
+            def seleccionar_dir():
+                carpeta = filedialog.askdirectory()
+                if carpeta:
+                    entry_dir.delete(0, tk.END)
+                    entry_dir.insert(0, carpeta)
+            tk.Button(ventana_renombrar, text="Explorar", command=seleccionar_dir).grid(row=0, column=2, padx=5, pady=5)
+            tk.Label(ventana_renombrar, text="Nombre base para renombrar:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+            entry_nombre = tk.Entry(ventana_renombrar, width=30)
+            entry_nombre.grid(row=1, column=1, padx=5, pady=5)
+            def ejecutar_renombrado():
+                dir_base = entry_dir.get().strip()
+                nombre_base = entry_nombre.get().strip()
+                if not dir_base or not nombre_base:
+                    messagebox.showerror("Error", "Debes seleccionar un directorio y un nombre base.")
+                    return
+                archivos = []
+                for root, _, files in os.walk(dir_base):
+                    for f in files:
+                        archivos.append(os.path.join(root, f))
+                archivos.sort()  # Para consistencia
+                contador = 1
+                for archivo in archivos:
+                    dir_actual = os.path.dirname(archivo)
+                    _, ext = os.path.splitext(archivo)
+                    nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                    nuevo_path = os.path.join(dir_actual, nuevo_nombre)
+                    # Evitar sobrescribir
+                    while os.path.exists(nuevo_path):
+                        contador += 1
+                        nuevo_nombre = f"{nombre_base}{contador}{ext}"
+                        nuevo_path = os.path.join(dir_actual, nuevo_nombre)
+                    try:
+                        os.rename(archivo, nuevo_path)
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo renombrar {archivo}: {e}")
+                        return
+                    contador += 1
+                messagebox.showinfo("Éxito", f"Se renombraron {len(archivos)} archivos.")
+                ventana_renombrar.destroy()
+            tk.Button(ventana_renombrar, text="Renombrar", command=ejecutar_renombrado).grid(row=2, column=1, pady=10)
+        tk.Button(ventana, text="Renombrar archivos en masa", command=abrir_ventana_renombrar).pack(pady=8)
 
 if __name__ == "__main__":
     root = tk.Tk()
