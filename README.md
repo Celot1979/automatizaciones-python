@@ -26,3 +26,4 @@ source venv/bin/activate  # En sistemas Unix
 venv\Scripts\activate  # En sistemas Windows
 pip install -r requirements.txt
 
+El código final del script lo encontrarás en /automatizaciones-python/Script_organizacion_archivos_directorios/ordenar_archivos_carpetas_gui.py.
