@@ -1,3 +1,0 @@
-([('ordenar_archivos_carpetas_gui',
-   '/Users/danielgil/Documents/Automatizacion_Python/automatizaciones-python/dist/ordenar_archivos_carpetas_gui',
-   'EXECUTABLE')],)
