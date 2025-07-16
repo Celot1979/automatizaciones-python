@@ -1,0 +1,3 @@
+([('OrganizadorArchivos',
+   '/Users/danielgil/Documents/Automatizacion_Python/automatizaciones-python/dist/OrganizadorArchivos',
+   'EXECUTABLE')],)
