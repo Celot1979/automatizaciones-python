@@ -277,49 +277,169 @@ class OrganizadorArchivosApp:
         def abrir_ventana_unificar():
             ventana_unificar = tk.Toplevel(self.root)
             ventana_unificar.title("Unificar archivos")
-            tk.Label(ventana_unificar, text="Selecciona los directorios a unificar:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-            listbox_dirs = tk.Listbox(ventana_unificar, selectmode=tk.MULTIPLE, width=40, height=6)
-            listbox_dirs.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+            ventana_unificar.geometry("800x600")
+            
+            # Frame principal
+            frame_principal = tk.Frame(ventana_unificar)
+            frame_principal.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            # Frame superior para controles
+            frame_controles = tk.Frame(frame_principal)
+            frame_controles.pack(fill="x", pady=(0, 10))
+            
+            # Botones para agregar directorios
+            tk.Label(frame_controles, text="Agregar directorios:").grid(row=0, column=0, sticky="w", padx=(0, 10))
+            tk.Button(frame_controles, text="Agregar directorio", command=lambda: agregar_directorio()).grid(row=0, column=1, padx=5)
+            tk.Button(frame_controles, text="Eliminar directorio", command=lambda: eliminar_directorio()).grid(row=0, column=2, padx=5)
+            
+            # Frame para la lista de directorios
+            frame_dirs = tk.Frame(frame_principal)
+            frame_dirs.pack(fill="x", pady=(0, 10))
+            tk.Label(frame_dirs, text="Directorios agregados:").pack(anchor="w")
+            listbox_dirs = tk.Listbox(frame_dirs, height=4)
+            listbox_dirs.pack(fill="x")
+            
+            # Frame para explorar archivos
+            frame_explorar = tk.Frame(frame_principal)
+            frame_explorar.pack(fill="both", expand=True, pady=(0, 10))
+            
+            # Frame izquierdo para árbol de directorios
+            frame_arbol = tk.Frame(frame_explorar)
+            frame_arbol.pack(side="left", fill="both", expand=True, padx=(0, 10))
+            tk.Label(frame_arbol, text="Explorar archivos:").pack(anchor="w")
+            
+            # Treeview para mostrar estructura de directorios
+            import tkinter.ttk as ttk
+            tree = ttk.Treeview(frame_arbol, show="tree")
+            tree.pack(fill="both", expand=True)
+            
+            # Scrollbar para el árbol
+            scroll_arbol = tk.Scrollbar(frame_arbol, orient="vertical", command=tree.yview)
+            scroll_arbol.pack(side="right", fill="y")
+            tree.config(yscrollcommand=scroll_arbol.set)
+            
+            # Frame derecho para lista de archivos seleccionados
+            frame_archivos = tk.Frame(frame_explorar)
+            frame_archivos.pack(side="right", fill="both", expand=True)
+            tk.Label(frame_archivos, text="Archivos seleccionados:").pack(anchor="w")
+            
+            # Listbox para archivos seleccionados
+            listbox_archivos = tk.Listbox(frame_archivos, selectmode=tk.MULTIPLE)
+            listbox_archivos.pack(fill="both", expand=True)
+            
+            # Scrollbar para archivos
+            scroll_archivos = tk.Scrollbar(frame_archivos, orient="vertical", command=listbox_archivos.yview)
+            scroll_archivos.pack(side="right", fill="y")
+            listbox_archivos.config(yscrollcommand=scroll_archivos.set)
+            
+            # Frame inferior para configuración de destino
+            frame_destino = tk.Frame(frame_principal)
+            frame_destino.pack(fill="x", pady=(10, 0))
+            
+            tk.Label(frame_destino, text="Directorio destino:").grid(row=0, column=0, sticky="w", padx=(0, 10))
+            entry_destino = tk.Entry(frame_destino, width=40)
+            entry_destino.grid(row=0, column=1, padx=5)
+            tk.Button(frame_destino, text="Explorar", command=lambda: seleccionar_destino()).grid(row=0, column=2, padx=5)
+            
+            tk.Label(frame_destino, text="Nombre base:").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(5, 0))
+            entry_nombre = tk.Entry(frame_destino, width=30)
+            entry_nombre.grid(row=1, column=1, padx=5, pady=(5, 0))
+            
+            # Variables para almacenar datos
             dirs_seleccionados = []
+            archivos_seleccionados = []
+            
             def agregar_directorio():
                 carpeta = filedialog.askdirectory()
                 if carpeta and carpeta not in dirs_seleccionados:
                     dirs_seleccionados.append(carpeta)
                     listbox_dirs.insert(tk.END, carpeta)
-            tk.Button(ventana_unificar, text="Agregar directorio", command=agregar_directorio).grid(row=0, column=1, padx=5, pady=5)
+                    cargar_arbol_directorios()
+            
             def eliminar_directorio():
                 seleccion = listbox_dirs.curselection()
                 for i in reversed(seleccion):
                     dirs_seleccionados.pop(i)
                     listbox_dirs.delete(i)
-            tk.Button(ventana_unificar, text="Eliminar seleccionado", command=eliminar_directorio).grid(row=2, column=1, padx=5, pady=5)
-            tk.Label(ventana_unificar, text="Selecciona el directorio destino:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-            entry_destino = tk.Entry(ventana_unificar, width=40)
-            entry_destino.grid(row=3, column=1, padx=5, pady=5)
+                cargar_arbol_directorios()
+            
+            def cargar_arbol_directorios():
+                # Limpiar árbol
+                for item in tree.get_children():
+                    tree.delete(item)
+                
+                for dir_path in dirs_seleccionados:
+                    # Agregar directorio raíz
+                    dir_name = os.path.basename(dir_path)
+                    root_item = tree.insert("", "end", text=f"📁 {dir_name}", values=(dir_path,), open=True)
+                    
+                    # Diccionario para mapear rutas a items del árbol
+                    path_to_item = {dir_path: root_item}
+                    
+                    # Función para ordenar archivos de forma natural (1, 2, 10, 11 en lugar de 1, 10, 11, 2)
+                    def natural_sort_key(text):
+                        import re
+                        def convert(text):
+                            return int(text) if text.isdigit() else text.lower()
+                        return [convert(c) for c in re.split('([0-9]+)', text)]
+                    
+                    # Cargar subdirectorios y archivos
+                    try:
+                        for root, dirs, files in os.walk(dir_path):
+                            # Obtener el item padre para este directorio
+                            parent_item = path_to_item.get(root, root_item)
+                            
+                            # Agregar subdirectorios ordenados numéricamente
+                            dirs_sorted = sorted(dirs, key=natural_sort_key)
+                            for dir_name in dirs_sorted:
+                                full_path = os.path.join(root, dir_name)
+                                dir_item = tree.insert(parent_item, "end", text=f"📁 {dir_name}", values=(full_path,))
+                                path_to_item[full_path] = dir_item
+                            
+                            # Agregar archivos ordenados numéricamente
+                            files_sorted = sorted(files, key=natural_sort_key)
+                            for file_name in files_sorted:
+                                full_path = os.path.join(root, file_name)
+                                tree.insert(parent_item, "end", text=f"📄 {file_name}", values=(full_path,))
+                    except Exception as e:
+                        print(f"Error al cargar directorio {dir_path}: {e}")
+            
+            def on_tree_select(event):
+                # Cuando se selecciona un archivo en el árbol, agregarlo a la lista de seleccionados
+                selection = tree.selection()
+                for item in selection:
+                    values = tree.item(item, "values")
+                    if values and os.path.isfile(values[0]):
+                        archivo = values[0]
+                        if archivo not in archivos_seleccionados:
+                            archivos_seleccionados.append(archivo)
+                            nombre_archivo = os.path.basename(archivo)
+                            listbox_archivos.insert(tk.END, nombre_archivo)
+            
+            def eliminar_archivo_seleccionado():
+                seleccion = listbox_archivos.curselection()
+                for i in reversed(seleccion):
+                    archivo = archivos_seleccionados.pop(i)
+                    listbox_archivos.delete(i)
+            
             def seleccionar_destino():
                 carpeta = filedialog.askdirectory()
                 if carpeta:
                     entry_destino.delete(0, tk.END)
                     entry_destino.insert(0, carpeta)
-            tk.Button(ventana_unificar, text="Explorar", command=seleccionar_destino).grid(row=3, column=2, padx=5, pady=5)
-            tk.Label(ventana_unificar, text="Nombre base para los archivos:").grid(row=4, column=0, padx=5, pady=5, sticky="w")
-            entry_nombre = tk.Entry(ventana_unificar, width=30)
-            entry_nombre.grid(row=4, column=1, padx=5, pady=5)
+            
             def ejecutar_unificacion():
                 destino = entry_destino.get().strip()
                 nombre_base = entry_nombre.get().strip()
-                if not dirs_seleccionados or not destino or not nombre_base:
-                    messagebox.showerror("Error", "Debes seleccionar al menos un directorio, un destino y un nombre base.")
+                
+                if not archivos_seleccionados or not destino or not nombre_base:
+                    messagebox.showerror("Error", "Debes seleccionar al menos un archivo, un destino y un nombre base.")
                     return
-                archivos = []
-                for d in dirs_seleccionados:
-                    for root, _, files in os.walk(d):
-                        for f in files:
-                            archivos.append(os.path.join(root, f))
-                archivos.sort()  # Para consistencia
+                
                 contador = 1
                 movimientos = []
                 ruta_log = os.path.join(destino, "registro_movimientos.txt")
+                
                 # Leer movimientos previos si existen
                 if os.path.exists(ruta_log):
                     with open(ruta_log, "r", encoding="utf-8") as f:
@@ -329,19 +449,23 @@ class OrganizadorArchivosApp:
                                 partes = [p.strip() for p in l.strip('*').split('*')]
                                 if len(partes) == 3 and partes[0] and partes[1] and partes[2] and partes[0] != "Fecha":
                                     movimientos.append(partes)
+                
                 base_folder = os.path.basename(destino.rstrip(os.sep))
-                for archivo in archivos:
+                
+                for archivo in archivos_seleccionados:
                     nombre_original = os.path.basename(archivo)
                     _, ext = os.path.splitext(archivo)
                     nuevo_nombre = f"{nombre_base}{contador}{ext}"
                     nuevo_path = os.path.join(destino, nuevo_nombre)
                     ruta_relativa = f"{base_folder}/{nuevo_nombre}"
+                    
                     # Evitar sobrescribir
                     while os.path.exists(nuevo_path):
                         contador += 1
                         nuevo_nombre = f"{nombre_base}{contador}{ext}"
                         nuevo_path = os.path.join(destino, nuevo_nombre)
                         ruta_relativa = f"{base_folder}/{nuevo_nombre}"
+                    
                     try:
                         shutil.copy2(archivo, nuevo_path)
                         movimientos.append([
@@ -353,10 +477,23 @@ class OrganizadorArchivosApp:
                         messagebox.showerror("Error", f"No se pudo copiar {archivo}: {e}")
                         return
                     contador += 1
+                
                 self._escribir_registro_tabla(ruta_log, movimientos)
-                messagebox.showinfo("Éxito", f"Se unificaron {len(archivos)} archivos en {destino}.")
+                messagebox.showinfo("Éxito", f"Se unificaron {len(archivos_seleccionados)} archivos en {destino}.")
                 ventana_unificar.destroy()
-            tk.Button(ventana_unificar, text="Unificar", command=ejecutar_unificacion).grid(row=5, column=1, pady=10)
+            
+            # Configurar eventos
+            tree.bind("<<TreeviewSelect>>", on_tree_select)
+            
+            # Botones de control para archivos
+            frame_botones_archivos = tk.Frame(frame_archivos)
+            frame_botones_archivos.pack(fill="x", pady=(5, 0))
+            tk.Button(frame_botones_archivos, text="Eliminar seleccionado", command=eliminar_archivo_seleccionado).pack(side="left", padx=(0, 5))
+            tk.Button(frame_botones_archivos, text="Limpiar lista", command=lambda: [archivos_seleccionados.clear(), listbox_archivos.delete(0, tk.END)]).pack(side="left")
+            
+            # Botón de unificación
+            tk.Button(frame_destino, text="Unificar archivos seleccionados", command=ejecutar_unificacion).grid(row=2, column=1, pady=10)
+            
         tk.Button(frame, text="Unificar archivos", command=abrir_ventana_unificar).grid(row=6+len(EXTENSIONES_A_CARPETAS), column=0, pady=(10,0))
 
     def seleccionar_carpeta(self):
