@@ -27,3 +27,15 @@ venv\Scripts\activate  # En sistemas Windows
 pip install -r requirements.txt
 
 El código final del script lo encontrarás en /automatizaciones-python/Script_organizacion_archivos_directorios/ordenar_archivos_carpetas_gui.py.
+
+---
+
+## Importante para usuarios de Linux
+
+En la rama **ejecutable-Linux** de este repositorio, encontrarás:
+
+- **Versión portable** del script para Linux (no requiere instalación, solo ejecutar).
+- **Instalador** para Linux, que permite instalar la aplicación de forma sencilla en tu sistema.
+
+Esto facilita el uso del gestor de archivos en sistemas Linux sin necesidad de configurar el entorno de desarrollo manualmente.
+
